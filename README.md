@@ -1,9 +1,5 @@
 # Emerge 🌱
 
-<p align="center">
-  <img src="https://via.placeholder.com/500x200?text=Emerge+Framework" alt="Emerge Framework" width="500"/>
-</p>
-
 ## What is Emerge?
 
 **Emerge** is an intelligent text curation framework that discovers, extracts, and organizes semantically meaningful content from unstructured text. Like a careful gardener that knows exactly which seedlings to nurture, Emerge identifies and cultivates the most valuable insights from your text data.
@@ -202,7 +198,3 @@ We welcome contributions! See our contributing guide for more information.
 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ---
-
-<p align="center">
-  <i>Let the meaningful patterns in your data emerge naturally.</i>
-</p>
