@@ -27,8 +27,6 @@ The result is a semantically rich dataset that's perfect for training or fine-tu
 
 ## 🧩 How It Works
 
-![Emerge Framework Workflow](https://via.placeholder.com/800x400?text=Emerge+Framework+Workflow)
-
 ### The Curation Pipeline
 
 ```mermaid
