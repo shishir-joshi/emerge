@@ -1,0 +1,9 @@
+text,topic
+"I've completed a detailed analysis of our Q3 financial performance, and I'd like to schedule a meeting to walk through the revenue projections for each business unit. Please let me know your availability for next week.",finance
+"We're experiencing critical performance issues in our production environment. The microservice architecture is showing increased latency, and we're seeing sporadic 503 errors. Need immediate assistance with debugging and resolving these issues.",engineering
+"Hey! Hope you had a great weekend! I was looking through some financial documents and noticed some interesting patterns in our operational expenses. Maybe we could grab coffee sometime this week and discuss them informally?",casual_finance
+"The Agile transformation initiative needs a comprehensive review. Could we schedule a two-hour workshop to assess our current sprint velocity, discuss impediments, and plan improvements for our next quarter's deliverables?",project_management
+"Our latest multi-channel marketing campaign has exceeded all KPIs! We've seen a 157% increase in engagement across platforms, with particularly strong performance on LinkedIn. Full report with demographics data coming soon!",marketing
+"Critical security vulnerability detected in our authentication service. CVE-2023-45678 affects our OAuth implementation. Need to coordinate an emergency patch deployment across all production instances within the next 4 hours.",engineering
+"Following yesterday's board meeting, we need to revise our five-year financial forecast and investment strategy. Could you prepare a detailed analysis of our current portfolio performance and potential market opportunities?",finance
+"Successfully deployed the new feature branch with major UI/UX improvements and performance optimizations. The load time has improved by 40%! Could use some help with integration testing before we push to production.",engineering
