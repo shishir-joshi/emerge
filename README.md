@@ -2,9 +2,11 @@
 
 ## What is Emerge?
 
-**Emerge** is an intelligent text curation framework that discovers, extracts, and organizes semantically meaningful content from unstructured text. Like a careful gardener that knows exactly which seedlings to nurture, Emerge identifies and cultivates the most valuable insights from your text data.
+**Emerge** is an intelligent text curation framework that discovers, extracts, and organizes semantically meaningful content from unstructured text. 
 
-> *The name "Emerge" refers to how meaningful patterns and themes naturally emerge from raw text through our curation process.*
+Emerge utilizes fine grained clustering to identify emergent patterns in your text data, uses fine grained prediction to assign discovered as well as any user defined labels to the data, and assigns graded relevance to each point, for curating a high quality labelled dataset ready for fine-tuning embedding models on your data!
+
+> *The name "Emerge" refers to how meaningful patterns and themes naturally emerge from raw text through the emerge curation process.*
 
 ## 🌟 Why Emerge Exists
 
@@ -40,7 +42,7 @@ graph TD
     G --> H[Train Embedding Model]
 ```
 
-1. **Chunk Generation**: Create variable-length, overlapping text spans that capture complete thoughts
+1. **Chunk Generation**: Create variable-length, overlapping text spans that capture semantics at various granularities 
 2. **Embedding**: Convert chunks to vector representations using pre-trained models
 3. **Clustering**: Group similar spans into topical clusters using UMAP+HDBSCAN
 4. **Optimization**: Use Pareto optimization to identify the most informative spans
