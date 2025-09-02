@@ -1,200 +1,129 @@
-# Emerge 🌱
+# Emerge
 
-## What is Emerge?
+## What is this?
 
-**Emerge** is an intelligent text curation framework that discovers, extracts, and organizes semantically meaningful content from unstructured text. 
+A text chunking and clustering tool. It takes your text, breaks it into overlapping chunks, embeds them, clusters similar chunks together, and gives you back a labeled dataset.
 
-Emerge utilizes fine grained clustering to identify emergent patterns in your text data, uses fine grained prediction to assign discovered as well as any user defined labels to the data, and assigns graded relevance to each point, for curating a high quality labelled dataset ready for fine-tuning embedding models on your data!
+That's it. No magic, no AI buzzwords.
 
-> *The name "Emerge" refers to how meaningful patterns and themes naturally emerge from raw text through the emerge curation process.*
+## What it actually does
 
-## 🌟 Why Emerge Exists
+1. **Chunks your text** - Splits text into overlapping spans of different lengths
+2. **Embeds the chunks** - Uses Jina embeddings to convert text chunks to vectors  
+3. **Clusters similar chunks** - Groups chunks using UMAP + HDBSCAN clustering
+4. **Labels everything** - Assigns cluster IDs and generates cluster titles via OpenAI API
+5. **Saves a dataset** - Outputs CSV with chunks and their cluster assignments
 
-Training effective embedding models requires high-quality, semantically annotated datasets, but manually creating these is prohibitively expensive and time-consuming. Emerge solves this by:
+Useful if you want to automatically organize and label chunks of text for dataset creation.
 
-1. **Automating semantic chunking** - Identifying natural semantic boundaries in text
-2. **Discovering emergent themes** - Finding related concepts across your corpus
-3. **Creating structured relevance judgments** - Generating labeled datasets for model training
-4. **Preserving context** - Maintaining the relationship between chunks and their sources
+## How it works
 
-The result is a semantically rich dataset that's perfect for training or fine-tuning embedding models that understand relevance at a deeper level.
-
-## 🚀 Key Features
-
-- **Pareto-optimal span prediction** - Identifies the most informative text spans using multi-objective optimization
-- **Context-aware clustering** - Groups semantically similar chunks while preserving their context
-- **Quality metrics** - Comprehensive measurement of content quality and cluster coherence
-- **Interactive visualization** - Explore and understand your content with intuitive highlighting
-- **Flexible processing pipeline** - Works with various embedding models and content types
-
-## 🧩 How It Works
-
-### The Curation Pipeline
-
-```mermaid
-graph TD
-    A[Raw Text] --> B[Generate Overlapping Chunks]
-    B --> C[Embed Chunks]
-    C --> D[Cluster Similar Spans]
-    D --> E[Score & Rank Clusters]
-    E --> F[Extract Representative Spans]
-    F --> G[Build Structured Dataset]
-    G --> H[Train Embedding Model]
-```
-
-1. **Chunk Generation**: Create variable-length, overlapping text spans that capture semantics at various granularities 
-2. **Embedding**: Convert chunks to vector representations using pre-trained models
-3. **Clustering**: Group similar spans into topical clusters using UMAP+HDBSCAN
-4. **Optimization**: Use Pareto optimization to identify the most informative spans
-5. **Dataset Creation**: Structure the data with cluster assignments and relevance scores
-6. **Quality Assessment**: Compute coherence and coverage metrics for validation
-
-## 🔍 Example
-
-Given a conversation about quarterly business performance:
+Basic pipeline:
 
 ```
-Customer: How did we perform in Q3 overall?
-Rep: Our Q3 results were strong. Revenue grew by 15% year-over-year, 
-     and we exceeded our target profit margin by 2.3 percentage points. 
-     The new product line contributed significantly, accounting for 
-     about 30% of our growth this quarter.
+Text → Chunk → Embed → Cluster → Label → Save
 ```
 
-Emerge identifies relevant semantic chunks and their clusters:
+1. **Chunk**: Create overlapping text spans (configurable min/max length)
+2. **Embed**: Convert chunks to vectors using Jina embeddings  
+3. **Cluster**: Group similar chunks with UMAP+HDBSCAN
+4. **Label**: Generate cluster titles using OpenAI API
+5. **Save**: Output CSV with chunks and cluster assignments
 
-| Chunk | Cluster ID | Cluster Title | Relevance |
-|-------|------------|---------------|-----------|
-| "Revenue grew by 15% year-over-year" | 2451 | Financial Performance Metrics | 0.95 |
-| "exceeded our target profit margin by 2.3 percentage points" | 2451 | Financial Performance Metrics | 0.87 |
-| "new product line contributed significantly" | 3782 | Product Performance | 0.82 |
-| "accounting for about 30% of our growth" | 2451 | Financial Performance Metrics | 0.79 |
+## Example output
 
-This structured output can then be used to train embedding models that better understand the semantic relationships between concepts like "revenue growth", "profit margins", and "product performance".
-
-## 🛠️ Components
-
-### Curator
-
-The orchestrator of the entire process, managing the flow of data through the pipeline.
-
-```python
-curator = Curator(
-    model=model,
-    tokenizer=tokenizer,
-    config=config,
-    analyzer=analyzer
-)
-
-# Process a batch of texts
-dataset = curator.process_batch(texts)
-
-# Compute quality metrics
-dataset_with_metrics = curator.compute_quality_metrics(dataset)
-
-# Prepare final dataset
-final_dataset = curator.prepare_final_dataset(dataset_with_metrics)
+Input text:
+```
+"Our Q3 results were strong. Revenue grew by 15% year-over-year, 
+and we exceeded our target profit margin by 2.3 percentage points."
 ```
 
-### ClusterAnalyzer
-
-Identifies meaningful spans in text and assigns them to semantic clusters.
-
-```python
-analyzer = LocalClusterAnalyzer(
-    pipeline=pipeline,
-    config=AnalyzerConfig(min_len=5, max_len=50),
-    model=model,
-    tokenizer=tokenizer
-)
-
-# Analyze text spans
-result, clusters, metrics, scores = analyzer.predict(
-    text, 
-    min_len=10, 
-    max_len=100,
-    stride=1
-)
+After processing, you get chunks labeled by cluster:
+```
+Chunk: "Revenue grew by 15% year-over-year" → Cluster 2451 (Financial Metrics)
+Chunk: "exceeded our target profit margin" → Cluster 2451 (Financial Metrics)  
+Chunk: "Q3 results were strong" → Cluster 1892 (Performance Summary)
 ```
 
-### ClusteringPipeline
+## What's in the code
 
-The underlying engine that performs dimensionality reduction and clustering.
+**Curator** (`src/curation/curator.py`)
+- Main class that orchestrates the whole pipeline
+- Processes batches of text and saves datasets
 
-```python
-pipeline = ClusteringPipeline(config=ClusteringConfig(
-    embedding_dims=768,
-    umap_n_components=[50],
-    min_cluster_sizes=[10, 15]
-))
+**LocalClusterAnalyzer** (`src/curation/analyzers/local_cluster_analyzer.py`)  
+- Handles the chunking and cluster assignment
+- Uses pre-trained clustering pipeline
 
-# Train the clustering model
-labels, evaluation = pipeline.fit_transform(embeddings)
-```
+**ClusteringPipeline** (`src/embedding/clustering.py`)
+- Does the UMAP + HDBSCAN clustering
+- Needs to be trained/loaded from artifacts
 
-## 🧪 Getting Started
+**ClusterSummarizer** (`src/embedding/cluster_summarizer.py`)
+- Generates cluster titles using OpenAI API
 
-### Installation
+## Setup
+
+You need a pre-trained clustering pipeline in `artifacts/clustering/models/` for this to work. 
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/emerge.git
+git clone https://github.com/shishir-joshi/emerge.git
 cd emerge
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Quick Start
+## Basic usage
 
 ```python
-from emerge.src.curation.curator import Curator, CuratorConfig
-from emerge.src.curation.analyzers.local_cluster_analyzer import LocalClusterAnalyzer
-from emerge.src.embedding.clustering import ClusteringPipeline
+from src.curation.curator import Curator, CuratorConfig
+from src.curation.analyzers.local_cluster_analyzer import LocalClusterAnalyzer
+from src.curation.analyzers.base_analyzer import AnalyzerConfig
+from src.embedding.clustering import ClusteringPipeline
+from transformers import AutoTokenizer, AutoModel
 
-# Load your pre-trained clustering pipeline
-pipeline = ClusteringPipeline.load("artifacts/clustering/models")
+# Load your model
+model = AutoModel.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained("jinaai/jina-embeddings-v3", trust_remote_code=True)
 
-# Initialize analyzer
+# Load clustering pipeline (you need this pre-trained)
+pipeline, _ = ClusteringPipeline.load("artifacts/clustering/models")
+
+# Set up analyzer
 analyzer = LocalClusterAnalyzer(
     pipeline=pipeline,
     config=AnalyzerConfig(min_len=5, max_len=50),
     model=model,
-    tokenizer=tokenizer
+    tokenizer=tokenizer,
+    model_kwargs={'model_batch_size': 32, 'lora_task': 'separation'}
 )
 
-# Configure curator
-config = CuratorConfig(
-    min_length=10,
-    max_length=200,
-    quality_threshold=0.6
-)
-
-# Initialize curator
+# Set up curator
+config = CuratorConfig(min_length=10, max_length=200)
 curator = Curator(model, tokenizer, config, analyzer)
 
 # Process your texts
+texts = ["Your text here", "Another text"]
 dataset = curator.process_batch(texts)
 final_dataset = curator.prepare_final_dataset(dataset)
 
-# Save the curated dataset
-curator.save_dataset(final_dataset, "outputs/curated_datasets/my_dataset")
+# Save results
+curator.save_dataset(final_dataset, "output/my_dataset")
 ```
 
-## 🔮 Future Directions
+Run the demo:
+```bash
+python src/curation/curator.py
+```
 
-- **Multi-modal support**: Extend to handle images, audio, and video content
-- **Interactive labeling**: Add human-in-the-loop capabilities for refinement
-- **Cross-lingual clustering**: Improve support for multilingual corpora
-- **Real-time processing**: Enable streaming of large-scale text collections
-- **Self-improving curation**: Implement feedback mechanisms to improve curation quality over time
+## Requirements
 
-## 💖 Contributing
+- Python 3.8+
+- PyTorch
+- Transformers (for Jina embeddings)
+- UMAP, HDBSCAN (for clustering)
+- OpenAI API key (for cluster naming)
+- Pre-trained clustering pipeline (not included)
 
-We welcome contributions! See our contributing guide for more information.
+## License
 
-## 📜 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
+MIT License - see LICENSE file.
