@@ -1,33 +1,26 @@
-# Emerge 🌱
+# Emerge
 
-## What is Emerge?
+## What is this?
 
-**Emerge** is an intelligent text curation framework that discovers, extracts, and organizes semantically meaningful content from unstructured text. 
+**Emerge** is an intelligent text curation framework that discovers, extracts, and organizes semantically meaningful content from unstructured text for training high-quality embedding models.
 
 Emerge utilizes fine grained clustering to identify emergent patterns in your text data, uses fine grained prediction to assign discovered as well as any user defined labels to the data, and assigns graded relevance to each point, for curating a high quality labelled dataset ready for fine-tuning embedding models on your data!
 
-> *The name "Emerge" refers to how meaningful patterns and themes naturally emerge from raw text through the emerge curation process.*
+Put simply, Emerge uses clustering and prediction over densly sampled text spans, relying on the power of HDBSCAN+UMAP and Pareto optimization over Cluster Quality metrics, to curate high quality, semantically rich datasets from your text data.
 
-## 🌟 Why Emerge Exists
+Optionally one can provide custom labels or "Topics" to guide the curation process, which Emerge can incorporate in its Late Interaction curator to produce a labelled dataset in the similar, densly sampled, clustered and relevance scored format.
 
-Training effective embedding models requires high-quality, semantically annotated datasets, but manually creating these is prohibitively expensive and time-consuming. Emerge solves this by:
+## What it actually does
 
-1. **Automating semantic chunking** - Identifying natural semantic boundaries in text
-2. **Discovering emergent themes** - Finding related concepts across your corpus
-3. **Creating structured relevance judgments** - Generating labeled datasets for model training
-4. **Preserving context** - Maintaining the relationship between chunks and their sources
+1. **Chunks your text** - Splits text into overlapping spans of different lengths
+2. **Embeds the chunks** - Uses Jina embeddings to convert text chunks to vectors  
+3. **Clusters similar chunks** - Groups chunks using UMAP + HDBSCAN clustering
+4. **Labels everything** - Assigns cluster IDs and generates cluster titles via OpenAI API
+5. **Saves a dataset** - Outputs CSV with chunks and their cluster assignments
 
-The result is a semantically rich dataset that's perfect for training or fine-tuning embedding models that understand relevance at a deeper level.
+Useful if you want to automatically organize and label chunks of text for dataset creation.
 
-## 🚀 Key Features
-
-- **Pareto-optimal span prediction** - Identifies the most informative text spans using multi-objective optimization
-- **Context-aware clustering** - Groups semantically similar chunks while preserving their context
-- **Quality metrics** - Comprehensive measurement of content quality and cluster coherence
-- **Interactive visualization** - Explore and understand your content with intuitive highlighting
-- **Flexible processing pipeline** - Works with various embedding models and content types
-
-## 🧩 How It Works
+## How It Works
 
 ### The Curation Pipeline
 
@@ -180,21 +173,5 @@ final_dataset = curator.prepare_final_dataset(dataset)
 # Save the curated dataset
 curator.save_dataset(final_dataset, "outputs/curated_datasets/my_dataset")
 ```
-
-## 🔮 Future Directions
-
-- **Multi-modal support**: Extend to handle images, audio, and video content
-- **Interactive labeling**: Add human-in-the-loop capabilities for refinement
-- **Cross-lingual clustering**: Improve support for multilingual corpora
-- **Real-time processing**: Enable streaming of large-scale text collections
-- **Self-improving curation**: Implement feedback mechanisms to improve curation quality over time
-
-## 💖 Contributing
-
-We welcome contributions! See our contributing guide for more information.
-
-## 📜 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ---
