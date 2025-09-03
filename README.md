@@ -125,6 +125,56 @@ pipeline = ClusteringPipeline(config=ClusteringConfig(
 labels, evaluation = pipeline.fit_transform(embeddings)
 ```
 
+### LateInteractionCrossEncoder
+
+A specialized analyzer for topic-based text classification using late interaction techniques with Jina Embeddings v3. This analyzer is ideal when you have predefined topics and want to classify text spans into those categories rather than discovering clusters automatically.
+
+```python
+from src.curation.analyzers.late_interaction_cross_encoder_analyzer import LateInteractionCrossEncoder, Topic
+
+# Define your topics with examples
+topics = [
+    Topic(
+        id=1, 
+        name="Customer Support", 
+        description="Customer support inquiries and questions",
+        examples=[
+            "I need help with my account",
+            "How do I reset my password?",
+            "Can you help me with billing issues?"
+        ]
+    ),
+    Topic(
+        id=2, 
+        name="Product Features", 
+        description="Questions about product features and capabilities",
+        examples=[
+            "What features does your product have?",
+            "Does it support mobile devices?",
+            "Can I integrate this with my existing tools?"
+        ]
+    )
+]
+
+# Initialize the analyzer
+analyzer = LateInteractionCrossEncoder(
+    config=AnalyzerConfig(min_len=5, max_len=50),
+    topics=topics,
+    relevance_threshold=0.5,
+    prediction_mode='late_chunking'  # or 'typical'
+)
+
+# Analyze text for topic matches
+text = "I'm having trouble logging into my account and need assistance"
+results, topic_ids, scores, metrics = analyzer.predict(
+    sentence=text,
+    stride=2,
+    min_len=10,
+    max_len=100,
+    sent_id="sample_1"
+)
+```
+
 ## 🧪 Getting Started
 
 ### Installation
@@ -138,7 +188,15 @@ cd emerge
 pip install -r requirements.txt
 ```
 
+### When to Use Which Analyzer
+
+**LocalClusterAnalyzer**: Use when you want to automatically discover hidden topics and patterns in your text data without predefined categories. Best for exploratory data analysis and unsupervised learning scenarios.
+
+**LateInteractionCrossEncoder**: Use when you have specific topics or categories in mind and want to classify text spans accordingly. Perfect for supervised classification tasks where you can provide topic descriptions and examples.
+
 ### Quick Start
+
+#### Using LocalClusterAnalyzer (Unsupervised Discovery)
 
 ```python
 from emerge.src.curation.curator import Curator, CuratorConfig
@@ -173,5 +231,92 @@ final_dataset = curator.prepare_final_dataset(dataset)
 # Save the curated dataset
 curator.save_dataset(final_dataset, "outputs/curated_datasets/my_dataset")
 ```
+
+#### Using LateInteractionCrossEncoder (Topic Classification)
+
+```python
+from emerge.src.curation.curator import Curator, CuratorConfig
+from emerge.src.curation.analyzers.late_interaction_cross_encoder_analyzer import LateInteractionCrossEncoder, Topic
+from emerge.src.curation.analyzers.base_analyzer import AnalyzerConfig
+
+# Define your business-specific topics
+topics = [
+    Topic(
+        id=1, 
+        name="Customer Issues", 
+        description="Customer complaints, problems, and support requests",
+        examples=[
+            "My product stopped working after the update",
+            "I can't access my account anymore", 
+            "The billing seems incorrect this month"
+        ]
+    ),
+    Topic(
+        id=2, 
+        name="Feature Requests", 
+        description="Requests for new features or product improvements",
+        examples=[
+            "Could you add dark mode support?",
+            "We need better integration with Slack",
+            "Mobile app needs offline functionality"
+        ]
+    ),
+    Topic(
+        id=3, 
+        name="Pricing Inquiries", 
+        description="Questions about pricing, plans, and billing",
+        examples=[
+            "What's included in the premium plan?",
+            "Do you offer discounts for nonprofits?",
+            "Can I upgrade my subscription mid-cycle?"
+        ]
+    )
+]
+
+# Initialize the late interaction analyzer
+analyzer = LateInteractionCrossEncoder(
+    config=AnalyzerConfig(min_len=10, max_len=100),
+    topics=topics,
+    relevance_threshold=0.4,
+    prediction_mode='late_chunking'
+)
+
+# Configure curator for topic-based classification
+config = CuratorConfig(
+    min_length=15,
+    max_length=150,
+    quality_threshold=0.4,
+    stride=2
+)
+
+# Initialize curator with the late interaction analyzer
+curator = Curator(model, tokenizer, config, analyzer)
+
+# Process customer feedback texts
+customer_texts = [
+    "Hi, I'm really frustrated because the mobile app keeps crashing when I try to sync my data...",
+    "Love the product overall! Would be amazing if you could add a feature to export data to CSV format...",
+    "I'm interested in upgrading to your enterprise plan but need to know what the pricing looks like..."
+]
+
+# Process and get topic-classified dataset
+dataset = curator.process_batch(customer_texts)
+final_dataset = curator.prepare_final_dataset(dataset)
+
+# Each text span will be labeled with the most relevant topic
+# Results include topic assignments, relevance scores, and representative spans
+print(f"Processed {len(final_dataset)} topic-labeled spans")
+```
+
+#### Key Features of LateInteractionCrossEncoder
+
+- **Efficient Processing**: Uses late interaction techniques similar to ColBERT for fast text-topic matching
+- **Flexible Topic Definition**: Supports topics with descriptions and multiple examples
+- **Two Processing Modes**: 
+  - `late_chunking`: Single embedding pass with token-level matching (more efficient)
+  - `typical`: Separate embedding for each text chunk (more flexible)
+- **MaxSim Scoring**: Advanced similarity scoring that finds the best token-level matches between text and topics
+- **Relevance Thresholding**: Filter out low-confidence matches with configurable thresholds
+- **Seamless Integration**: Works with the existing Curator framework and follows the same interface as other analyzers
 
 ---
