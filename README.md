@@ -1,46 +1,86 @@
-# Emerge
+# Training Embedding Models on your domain with `Emerge`
 
-## What is this?
+Curate high-quality, relevance-weighted, topic-tagged datasets from your raw text — to train and fine-tune embedding models that actually understand your domain.
 
-**Emerge** is an intelligent text curation framework that discovers, extracts, and organizes semantically meaningful content from unstructured text for training high-quality embedding models.
+## The problem:
 
-Emerge utilizes fine grained clustering to identify emergent patterns in your text data, uses fine grained prediction to assign discovered as well as any user defined labels to the data, and assigns graded relevance to each point, for curating a high quality labelled dataset ready for fine-tuning embedding models on your data!
+Training embedding models on domain-specific data is challenging due to the lack of high-quality, labeled datasets. Traditional methods often rely on generic datasets that do not capture the nuances of specific domains, leading to suboptimal model performance.
+Can we generate structured datasets from unstructured text, with minimal human effort?
 
-Put simply, Emerge uses clustering and prediction over densly sampled text spans, relying on the power of HDBSCAN+UMAP and Pareto optimization over Cluster Quality metrics, to curate high quality, semantically rich datasets from your text data.
+## What is Emerge?
 
-Optionally one can provide custom labels or "Topics" to guide the curation process, which Emerge can incorporate in its Late Interaction curator to produce a labelled dataset in the similar, densly sampled, clustered and relevance scored format.
+Emerge discovers, extracts, and organizes semantically meaningful spans from unstructured text, producing a structured dataset (spans + cluster/topic labels + relevance/quality scores). This dataset is ready-made for:
+- Fine-tuning existing embedding models on your data (e.g., GTE, BGE, E5, Jina)
+- Training new domain-specific embedders from scratch
+- Evaluating embedding quality for search, RAG, clustering, and deduplication
 
-## What it actually does
+Two paths to fit your custom data:
+1. **Unsupervised discovery** (`LocalClusterAnalyzer`) – discover emergent topics and mine positive/negative pairs from clusters.  
+2. **Topic-guided** (`LateInteractionCrossEncoder`) – use your topic definitions (name/description/examples) to produce labeled spans per topic.
 
-1. **Chunks your text** - Splits text into overlapping spans of different lengths
-2. **Embeds the chunks** - Uses Jina embeddings to convert text chunks to vectors  
-3. **Clusters similar chunks** - Groups chunks using UMAP + HDBSCAN clustering
-4. **Labels everything** - Assigns cluster IDs and generates cluster titles via OpenAI API
-5. **Saves a dataset** - Outputs CSV with chunks and their cluster assignments
+High-level pipeline:
+1. Dense, overlapping span generation  
+2. Embedding  
+3. UMAP + HDBSCAN clustering (unsupervised) **or** late-interaction scoring (topic-guided)  
+4. Pareto selection + relevance/quality metrics  
+5. Structured dataset export (CSV/Parquet) for embedding training  
 
-Useful if you want to automatically organize and label chunks of text for dataset creation.
+---
 
-## How It Works
+## Minimal Emerge flow (reference)
 
-### The Curation Pipeline
+```python
+# Unsupervised discovery
+from emerge.src.curation.curator import Curator, CuratorConfig
+from emerge.src.curation.analyzers.local_cluster_analyzer import LocalClusterAnalyzer
+from emerge.src.embedding.clustering import ClusteringPipeline
+from emerge.src.curation.analyzers.base_analyzer import AnalyzerConfig
 
-```mermaid
-graph TD
-    A[Raw Text] --> B[Generate Overlapping Chunks]
-    B --> C[Embed Chunks]
-    C --> D[Cluster Similar Spans]
-    D --> E[Score & Rank Clusters]
-    E --> F[Extract Representative Spans]
-    F --> G[Build Structured Dataset]
-    G --> H[Train Embedding Model]
+pipeline = ClusteringPipeline.load("artifacts/clustering/models")
+analyzer = LocalClusterAnalyzer(
+    pipeline=pipeline,
+    config=AnalyzerConfig(min_len=5, max_len=50),
+    model=model,
+    tokenizer=tokenizer,
+)
+
+config  = CuratorConfig(min_length=10, max_length=200, quality_threshold=0.6)
+curator = Curator(model, tokenizer, config, analyzer)
+
+spans  = curator.process_batch(texts)
+final  = curator.prepare_final_dataset(spans)
+curator.save_dataset(final, "outputs/curated/curated_spans.csv")
 ```
 
-1. **Chunk Generation**: Create variable-length, overlapping text spans that capture semantics at various granularities 
-2. **Embedding**: Convert chunks to vector representations using pre-trained models
-3. **Clustering**: Group similar spans into topical clusters using UMAP+HDBSCAN
-4. **Optimization**: Use Pareto optimization to identify the most informative spans
-5. **Dataset Creation**: Structure the data with cluster assignments and relevance scores
-6. **Quality Assessment**: Compute coherence and coverage metrics for validation
+```python
+# Topic-guided labeling
+from emerge.src.curation.curator import Curator, CuratorConfig
+from emerge.src.curation.analyzers.late_interaction_cross_encoder_analyzer import LateInteractionCrossEncoder, Topic
+from emerge.src.curation.analyzers.base_analyzer import AnalyzerConfig
+
+topics = [
+    Topic(id=1, name="Customer Issues",
+          description="Complaints/support requests",
+          examples=["My product stopped working", "I can't access my account"]),
+    Topic(id=2, name="Feature Requests",
+          description="New features or improvements",
+          examples=["Add dark mode", "Integrate with Slack"]),
+]
+
+analyzer = LateInteractionCrossEncoder(
+    config=AnalyzerConfig(min_len=10, max_len=100),
+    topics=topics,
+    relevance_threshold=0.4,
+    prediction_mode='late_chunking',
+)
+
+config  = CuratorConfig(min_length=15, max_length=150, quality_threshold=0.4, stride=2)
+curator = Curator(model, tokenizer, config, analyzer)
+
+labeled = curator.process_batch(customer_texts)
+final   = curator.prepare_final_dataset(labeled)
+curator.save_dataset(final, "outputs/curated/topic_spans.csv")
+```
 
 ## 🔍 Example
 
@@ -52,6 +92,9 @@ Rep: Our Q3 results were strong. Revenue grew by 15% year-over-year,
      and we exceeded our target profit margin by 2.3 percentage points. 
      The new product line contributed significantly, accounting for 
      about 30% of our growth this quarter.
+     In other areas, we need to source more raw materials to keep up with demand.
+     Supply chain issues from last year have mostly been resolved.
+     Overall, it's been a solid quarter with positive momentum going into Q4.
 ```
 
 Emerge identifies relevant semantic chunks and their clusters:
@@ -62,261 +105,130 @@ Emerge identifies relevant semantic chunks and their clusters:
 | "exceeded our target profit margin by 2.3 percentage points" | 2451 | Financial Performance Metrics | 0.87 |
 | "new product line contributed significantly" | 3782 | Product Performance | 0.82 |
 | "accounting for about 30% of our growth" | 2451 | Financial Performance Metrics | 0.79 |
+| "Q3 results were strong" | 1123 | Quarterly Business Overview | 0.75 |
+| "We need to source more raw materials" | 4890 | Supply Chain Management | 0.65 |
+| "Supply chain issues from last year have mostly been resolved" | 4890 | Supply Chain Management | 0.60 |
+| "Overall, it's been a solid quarter with positive momentum going into Q4" | 1123 | Quarterly Business Overview | 0.75 |
 
 This structured output can then be used to train embedding models that better understand the semantic relationships between concepts like "revenue growth", "profit margins", and "product performance".
 
-## 🛠️ Components
-
-### Curator
-
-The orchestrator of the entire process, managing the flow of data through the pipeline.
-
-```python
-curator = Curator(
-    model=model,
-    tokenizer=tokenizer,
-    config=config,
-    analyzer=analyzer
-)
-
-# Process a batch of texts
-dataset = curator.process_batch(texts)
-
-# Compute quality metrics
-dataset_with_metrics = curator.compute_quality_metrics(dataset)
-
-# Prepare final dataset
-final_dataset = curator.prepare_final_dataset(dataset_with_metrics)
-```
-
-### ClusterAnalyzer
-
-Identifies meaningful spans in text and assigns them to semantic clusters.
-
-```python
-analyzer = LocalClusterAnalyzer(
-    pipeline=pipeline,
-    config=AnalyzerConfig(min_len=5, max_len=50),
-    model=model,
-    tokenizer=tokenizer
-)
-
-# Analyze text spans
-result, clusters, metrics, scores = analyzer.predict(
-    text, 
-    min_len=10, 
-    max_len=100,
-    stride=1
-)
-```
-
-### ClusteringPipeline
-
-The underlying engine that performs dimensionality reduction and clustering.
-
-```python
-pipeline = ClusteringPipeline(config=ClusteringConfig(
-    embedding_dims=768,
-    umap_n_components=[50],
-    min_cluster_sizes=[10, 15]
-))
-
-# Train the clustering model
-labels, evaluation = pipeline.fit_transform(embeddings)
-```
-
-### LateInteractionCrossEncoder
-
-A specialized analyzer for topic-based text classification using late interaction techniques with Jina Embeddings v3. This analyzer is ideal when you have predefined topics and want to classify text spans into those categories rather than discovering clusters automatically.
-
-```python
-from src.curation.analyzers.late_interaction_cross_encoder_analyzer import LateInteractionCrossEncoder, Topic
-
-# Define your topics with examples
-topics = [
-    Topic(
-        id=1, 
-        name="Customer Support", 
-        description="Customer support inquiries and questions",
-        examples=[
-            "I need help with my account",
-            "How do I reset my password?",
-            "Can you help me with billing issues?"
-        ]
-    ),
-    Topic(
-        id=2, 
-        name="Product Features", 
-        description="Questions about product features and capabilities",
-        examples=[
-            "What features does your product have?",
-            "Does it support mobile devices?",
-            "Can I integrate this with my existing tools?"
-        ]
-    )
-]
-
-# Initialize the analyzer
-analyzer = LateInteractionCrossEncoder(
-    config=AnalyzerConfig(min_len=5, max_len=50),
-    topics=topics,
-    relevance_threshold=0.5,
-    prediction_mode='late_chunking'  # or 'typical'
-)
-
-# Analyze text for topic matches
-text = "I'm having trouble logging into my account and need assistance"
-results, topic_ids, scores, metrics = analyzer.predict(
-    sentence=text,
-    stride=2,
-    min_len=10,
-    max_len=100,
-    sent_id="sample_1"
-)
-```
-
-## 🧪 Getting Started
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/emerge.git
-cd emerge
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### When to Use Which Analyzer
-
-**LocalClusterAnalyzer**: Use when you want to automatically discover hidden topics and patterns in your text data without predefined categories. Best for exploratory data analysis and unsupervised learning scenarios.
-
-**LateInteractionCrossEncoder**: Use when you have specific topics or categories in mind and want to classify text spans accordingly. Perfect for supervised classification tasks where you can provide topic descriptions and examples.
-
-### Quick Start
-
-#### Using LocalClusterAnalyzer (Unsupervised Discovery)
-
-```python
-from emerge.src.curation.curator import Curator, CuratorConfig
-from emerge.src.curation.analyzers.local_cluster_analyzer import LocalClusterAnalyzer
-from emerge.src.embedding.clustering import ClusteringPipeline
-
-# Load your pre-trained clustering pipeline
-pipeline = ClusteringPipeline.load("artifacts/clustering/models")
-
-# Initialize analyzer
-analyzer = LocalClusterAnalyzer(
-    pipeline=pipeline,
-    config=AnalyzerConfig(min_len=5, max_len=50),
-    model=model,
-    tokenizer=tokenizer
-)
-
-# Configure curator
-config = CuratorConfig(
-    min_length=10,
-    max_length=200,
-    quality_threshold=0.6
-)
-
-# Initialize curator
-curator = Curator(model, tokenizer, config, analyzer)
-
-# Process your texts
-dataset = curator.process_batch(texts)
-final_dataset = curator.prepare_final_dataset(dataset)
-
-# Save the curated dataset
-curator.save_dataset(final_dataset, "outputs/curated_datasets/my_dataset")
-```
-
-#### Using LateInteractionCrossEncoder (Topic Classification)
-
-```python
-from emerge.src.curation.curator import Curator, CuratorConfig
-from emerge.src.curation.analyzers.late_interaction_cross_encoder_analyzer import LateInteractionCrossEncoder, Topic
-from emerge.src.curation.analyzers.base_analyzer import AnalyzerConfig
-
-# Define your business-specific topics
-topics = [
-    Topic(
-        id=1, 
-        name="Customer Issues", 
-        description="Customer complaints, problems, and support requests",
-        examples=[
-            "My product stopped working after the update",
-            "I can't access my account anymore", 
-            "The billing seems incorrect this month"
-        ]
-    ),
-    Topic(
-        id=2, 
-        name="Feature Requests", 
-        description="Requests for new features or product improvements",
-        examples=[
-            "Could you add dark mode support?",
-            "We need better integration with Slack",
-            "Mobile app needs offline functionality"
-        ]
-    ),
-    Topic(
-        id=3, 
-        name="Pricing Inquiries", 
-        description="Questions about pricing, plans, and billing",
-        examples=[
-            "What's included in the premium plan?",
-            "Do you offer discounts for nonprofits?",
-            "Can I upgrade my subscription mid-cycle?"
-        ]
-    )
-]
-
-# Initialize the late interaction analyzer
-analyzer = LateInteractionCrossEncoder(
-    config=AnalyzerConfig(min_len=10, max_len=100),
-    topics=topics,
-    relevance_threshold=0.4,
-    prediction_mode='late_chunking'
-)
-
-# Configure curator for topic-based classification
-config = CuratorConfig(
-    min_length=15,
-    max_length=150,
-    quality_threshold=0.4,
-    stride=2
-)
-
-# Initialize curator with the late interaction analyzer
-curator = Curator(model, tokenizer, config, analyzer)
-
-# Process customer feedback texts
-customer_texts = [
-    "Hi, I'm really frustrated because the mobile app keeps crashing when I try to sync my data...",
-    "Love the product overall! Would be amazing if you could add a feature to export data to CSV format...",
-    "I'm interested in upgrading to your enterprise plan but need to know what the pricing looks like..."
-]
-
-# Process and get topic-classified dataset
-dataset = curator.process_batch(customer_texts)
-final_dataset = curator.prepare_final_dataset(dataset)
-
-# Each text span will be labeled with the most relevant topic
-# Results include topic assignments, relevance scores, and representative spans
-print(f"Processed {len(final_dataset)} topic-labeled spans")
-```
-
-#### Key Features of LateInteractionCrossEncoder
-
-- **Efficient Processing**: Uses late interaction techniques similar to ColBERT for fast text-topic matching
-- **Flexible Topic Definition**: Supports topics with descriptions and multiple examples
-- **Two Processing Modes**: 
-  - `late_chunking`: Single embedding pass with token-level matching (more efficient)
-  - `typical`: Separate embedding for each text chunk (more flexible)
-- **MaxSim Scoring**: Advanced similarity scoring that finds the best token-level matches between text and topics
-- **Relevance Thresholding**: Filter out low-confidence matches with configurable thresholds
-- **Seamless Integration**: Works with the existing Curator framework and follows the same interface as other analyzers
 
 ---
+
+## Training Recipes
+
+After exporting a dataset (columns like `text_span`, `cluster_id`/`topic_id`, `relevance`, …) choose one of the recipes below.
+
+### Recipe A — Unsupervised clusters → Contrastive fine-tuning
+
+Mine positives (same cluster) and negatives (other clusters). Sample by `relevance` to prioritize high-signal spans.
+
+```python
+import pandas as pd, random
+from sentence_transformers import SentenceTransformer, InputExample, losses
+from torch.utils.data import DataLoader
+
+# Load curated spans
+df = pd.read_csv("outputs/curated/curated_spans.csv")
+df = df.dropna(subset=["text_span", "cluster_id"]).copy()
+
+# Keep top-K per cluster (optional)
+K = 50
+df.sort_values(["cluster_id", "relevance"], ascending=[True, False], inplace=True)
+top = df.groupby("cluster_id").head(K)
+
+# Build positive pairs
+pairs = []
+for _, g in top.groupby("cluster_id"):
+    spans = g["text_span"].tolist()
+    random.shuffle(spans)
+    for i in range(0, len(spans)-1, 2):
+        pairs.append(InputExample(texts=[spans[i], spans[i+1]]))
+
+train_loader = DataLoader(pairs, batch_size=64, shuffle=True)
+model = SentenceTransformer("thenlper/gte-base")        # choose a strong base
+loss  = losses.MultipleNegativesRankingLoss(model)
+
+model.fit(train_objectives=[(train_loader, loss)],
+          epochs=2, warmup_steps=1000, show_progress_bar=True)
+
+model.save("artifacts/models/gte-base-emerge-ft")
+```
+
+**Why it works** – spans in the same cluster are semantically close; MNR loss pulls positives together and pushes others apart.
+
+### Recipe B — Topic-guided → Retrieval-style bi-encoder
+
+Treat each topic as a “query” and its spans as “documents.”
+
+```python
+import pandas as pd
+from sentence_transformers import SentenceTransformer, InputExample, losses
+from torch.utils.data import DataLoader
+
+df = pd.read_csv("outputs/curated/topic_spans.csv")
+# columns: text_span, topic_id, topic_name, topic_description, relevance
+
+pairs = []
+for _, row in df.iterrows():
+    query = f"{row['topic_name']}: {row['topic_description']}"
+    doc   = row["text_span"]
+    pairs.append(InputExample(texts=[query, doc]))
+
+train_loader = DataLoader(pairs, batch_size=32, shuffle=True)
+model = SentenceTransformer("BAAI/bge-small-en-v1.5")
+loss  = losses.CosineSimilarityLoss(model)
+
+model.fit(train_objectives=[(train_loader, loss)],
+          epochs=2, warmup_steps=500, show_progress_bar=True)
+
+model.save("artifacts/models/bge-topic-emerge-ft")
+```
+
+#### Optional: Triplet mining
+- Positives: same cluster/topic  
+- Negatives: different clusters/topics or low-relevance spans  
+- Weight hard-negative sampling by `relevance`.
+
+---
+
+## Evaluation
+
+1. **Retrieval sanity** – run topic queries, inspect top spans.  
+2. **Task-level** – evaluate on your search/RAG datasets (hits@k, nDCG@k, MRR) comparing base vs fine-tuned.  
+3. **Benchmark** – optional MTEB tasks relevant to your domain.
+
+```python
+from sentence_transformers import SentenceTransformer, util
+import torch, pandas as pd
+
+model = SentenceTransformer("artifacts/models/gte-base-emerge-ft")
+corpus = pd.read_csv("outputs/curated/curated_spans.csv")["text_span"].tolist()
+corpus_emb = model.encode(corpus, convert_to_tensor=True, normalize_embeddings=True)
+
+query = "Pricing inquiries: questions about plans and billing"
+q_emb = model.encode(query, convert_to_tensor=True, normalize_embeddings=True)
+
+scores = util.cos_sim(q_emb, corpus_emb)[0]
+best_idx = torch.topk(scores, k=10).indices.tolist()
+for i in best_idx:
+    print(corpus[i], float(scores[i]))
+```
+
+---
+
+## When to use which analyzer
+
+| Analyzer | Use-case | Outcome |
+|----------|----------|---------|
+| **LocalClusterAnalyzer** | No predefined labels; discover domain structure | Unsupervised clusters for contrastive fine-tuning |
+| **LateInteractionCrossEncoder** | You have business topics/categories | Labeled spans for retrieval/classification training |
+
+---
+
+## Practical tips
+
+- Use `relevance` to cap low-signal spans and balance clusters/topics.  
+- Normalize embeddings (`normalize_embeddings=True`) during training/eval for stable cosine similarity.  
+- Start with 1-2 epochs; compare base vs fine-tuned before scaling out.  
+- Log dataset stats (clusters, spans/cluster, label balance) for reproducibility.  
